@@ -1,0 +1,6 @@
+{
+  "name": "Financial Sentinel",
+  "description": "A minimal dashboard for tracking market sentiment (CNN Fear & Greed) and economic indicators (BOK Bond Yields).",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
