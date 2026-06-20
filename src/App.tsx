@@ -39,7 +39,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFearGreedData = async () => {
+  const fetchFearGreedData = async (forceRefetch = false) => {
+    if (fearGreedData.length > 0 && !forceRefetch) return;
     try {
       const { data } = await axios.get<FearGreedApiResponse>('/api/fear-and-greed');
       setFearGreedData(data.fear_and_greed_historical.data);
@@ -49,10 +50,12 @@ export default function App() {
     }
   };
 
-  const fetchBondData = async () => {
-    // Current month start
+  const fetchBondData = async (forceRefetch = false) => {
+    if (bondData.length > 0 && !forceRefetch) return;
+
+    // Prefetch all data for up to 5 Years (60 months) in a single request, then filter on client side instantly
     const endDate = format(new Date(), 'yyyyMMdd');
-    const startDate = format(subMonths(new Date(), 12 * rangeYears), 'yyyyMMdd');
+    const startDate = format(subMonths(new Date(), 60), 'yyyyMMdd');
 
     const bonds = [
       { cd: '722Y001', cd1: '0101000' }, // 국고채 (1년)
@@ -83,26 +86,34 @@ export default function App() {
     }
   };
 
-  const loadData = useCallback(async () => {
-    // Only show global loading spinner if we don't have data yet or if it's a new range
-    setLoading(true);
+  const loadData = useCallback(async (forceRefetch = false) => {
+    const hasData = activeTab === 'sentiment' ? fearGreedData.length > 0 : bondData.length > 0;
+    if (!hasData || forceRefetch) {
+      setLoading(true);
+    }
     setError(null);
     try {
       if (activeTab === 'sentiment') {
-        await fetchFearGreedData();
+        await fetchFearGreedData(forceRefetch);
       } else {
-        await fetchBondData();
+        await fetchBondData(forceRefetch);
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, rangeYears]);
+  }, [activeTab, fearGreedData.length, bondData.length]);
 
   useEffect(() => {
     loadData();
-  }, [activeTab, rangeYears]); // Fetch when tab or range changes
+  }, [activeTab]); // Fetch only when tab shifts (ranges are client-side filtered now)
+
+  const filteredBondData = React.useMemo(() => {
+    if (bondData.length === 0) return [];
+    const thresholdDateStr = format(subMonths(new Date(), 12 * rangeYears), 'yyyyMMdd');
+    return bondData.filter(d => d.TIME >= thresholdDateStr);
+  }, [bondData, rangeYears]);
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] text-gray-900 font-sans selection:bg-black selection:text-white">
@@ -153,7 +164,7 @@ export default function App() {
             </div>
           )}
           <button 
-            onClick={loadData}
+            onClick={() => loadData(true)}
             disabled={loading}
             className="p-2 text-gray-400 hover:text-black transition-colors disabled:opacity-30"
           >
@@ -161,7 +172,7 @@ export default function App() {
           </button>
         </div>
       </nav>
-
+ 
       <main className="pt-32 pb-20 px-6 max-w-6xl mx-auto">
         <header className="mb-12">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">
@@ -177,7 +188,7 @@ export default function App() {
               : 'Tracking South Korea’s benchmark bond yields provides insights into inflation expectations and domestic monetary policy direction.'}
           </p>
         </header>
-
+ 
         <div className="relative group">
           <AnimatePresence mode="wait">
             {error ? (
@@ -194,7 +205,7 @@ export default function App() {
                 <h3 className="text-lg font-bold text-gray-900 mb-1">Could not load data</h3>
                 <p className="text-gray-500 text-sm max-w-xs">{error}</p>
                 <button 
-                  onClick={loadData}
+                  onClick={() => loadData(true)}
                   className="mt-6 px-6 py-2 bg-black text-white rounded-full text-xs font-bold hover:bg-gray-800 transition-colors"
                 >
                   Retry Connection
@@ -223,7 +234,7 @@ export default function App() {
                 {activeTab === 'sentiment' ? (
                   <FearGreedChart data={fearGreedData} />
                 ) : (
-                  <BondYieldChart data={bondData} />
+                  <BondYieldChart data={filteredBondData} />
                 )}
               </motion.div>
             )}
