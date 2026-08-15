@@ -1,6 +1,8 @@
 {
   "name": "Financial Sentinel",
-  "description": "A minimal dashboard for tracking market sentiment (CNN Fear & Greed) and economic indicators (BOK Bond Yields).",
+  "description": "A minimal financial dashboard for tracking market sentiment (CNN Fear & Greed), economic indicators (BOK Bond Yields), and KOFIA margin trading balance (신용융자 잔고).",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

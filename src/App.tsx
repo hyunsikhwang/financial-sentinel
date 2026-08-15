@@ -7,12 +7,21 @@ import {
   RefreshCcw, 
   AlertCircle,
   BarChart3,
-  Globe
+  Globe,
+  Wallet
 } from 'lucide-react';
-import { format, subMonths, startOfMonth } from 'date-fns';
-import { FearGreedData, FearGreedApiResponse, BondRow, EcosApiResponse } from './types';
+import { format, subMonths } from 'date-fns';
+import { 
+  FearGreedData, 
+  FearGreedApiResponse, 
+  BondRow, 
+  EcosApiResponse, 
+  KofiaMarginRow, 
+  KofiaApiResponse 
+} from './types';
 import { FearGreedChart } from './components/FearGreedChart';
 import { BondYieldChart } from './components/BondYieldChart';
+import { MarginBalanceChart } from './components/MarginBalanceChart';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -23,6 +32,7 @@ function cn(...inputs: ClassValue[]) {
 const TABS = [
   { id: 'sentiment', label: 'Fear & Greed Index', icon: Activity },
   { id: 'bonds', label: 'Bond Yields', icon: TrendingUp },
+  { id: 'margin', label: 'Margin Balance', icon: Wallet },
 ];
 
 const RANGES = [
@@ -36,6 +46,7 @@ export default function App() {
   const [rangeYears, setRangeYears] = useState(1);
   const [fearGreedData, setFearGreedData] = useState<FearGreedData[]>([]);
   const [bondData, setBondData] = useState<BondRow[]>([]);
+  const [marginData, setMarginData] = useState<KofiaMarginRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,8 +97,36 @@ export default function App() {
     }
   };
 
+  const fetchMarginData = async (forceRefetch = false) => {
+    if (marginData.length > 0 && !forceRefetch) return;
+
+    const endDate = format(new Date(), 'yyyyMMdd');
+    const startDate = format(subMonths(new Date(), 6), 'yyyyMMdd');
+
+    try {
+      const { data } = await axios.get<KofiaApiResponse>('/api/margin-balance', {
+        params: {
+          start_date: startDate,
+          end_date: endDate
+        }
+      });
+      if (data && data.ds1) {
+        setMarginData(data.ds1);
+      }
+    } catch (err) {
+      console.error(err);
+      throw new Error('Failed to load margin balance data');
+    }
+  };
+
   const loadData = useCallback(async (forceRefetch = false) => {
-    const hasData = activeTab === 'sentiment' ? fearGreedData.length > 0 : bondData.length > 0;
+    const hasData = 
+      activeTab === 'sentiment' 
+        ? fearGreedData.length > 0 
+        : activeTab === 'bonds' 
+        ? bondData.length > 0 
+        : marginData.length > 0;
+
     if (!hasData || forceRefetch) {
       setLoading(true);
     }
@@ -95,19 +134,21 @@ export default function App() {
     try {
       if (activeTab === 'sentiment') {
         await fetchFearGreedData(forceRefetch);
-      } else {
+      } else if (activeTab === 'bonds') {
         await fetchBondData(forceRefetch);
+      } else if (activeTab === 'margin') {
+        await fetchMarginData(forceRefetch);
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [activeTab, fearGreedData.length, bondData.length]);
+  }, [activeTab, fearGreedData.length, bondData.length, marginData.length]);
 
   useEffect(() => {
     loadData();
-  }, [activeTab]); // Fetch only when tab shifts (ranges are client-side filtered now)
+  }, [activeTab]);
 
   const filteredBondData = React.useMemo(() => {
     if (bondData.length === 0) return [];
@@ -180,13 +221,22 @@ export default function App() {
             Live Market Intelligence
           </div>
           <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            {activeTab === 'sentiment' ? 'Market Sentiment' : 'Economic Indicators'}
-          </h2>
-          <p className="text-gray-500 mt-2 max-w-2xl leading-relaxed">
             {activeTab === 'sentiment' 
-              ? 'CNN’s Fear & Greed Index tracks seven different indicators to determine how much fear or greed is driving the S&P 500.' 
-              : 'Tracking South Korea’s benchmark bond yields provides insights into inflation expectations and domestic monetary policy direction.'}
-          </p>
+              ? 'Market Sentiment' 
+              : activeTab === 'bonds'
+              ? 'Economic Indicators'
+              : 'Margin Balance'}
+          </h2>
+          {activeTab === 'sentiment' && (
+            <p className="text-gray-500 mt-2 max-w-2xl leading-relaxed">
+              CNN’s Fear & Greed Index tracks seven different indicators to determine how much fear or greed is driving the S&P 500.
+            </p>
+          )}
+          {activeTab === 'bonds' && (
+            <p className="text-gray-500 mt-2 max-w-2xl leading-relaxed">
+              Tracking South Korea’s benchmark bond yields provides insights into inflation expectations and domestic monetary policy direction.
+            </p>
+          )}
         </header>
  
         <div className="relative group">
@@ -233,8 +283,10 @@ export default function App() {
               >
                 {activeTab === 'sentiment' ? (
                   <FearGreedChart data={fearGreedData} />
-                ) : (
+                ) : activeTab === 'bonds' ? (
                   <BondYieldChart data={filteredBondData} />
+                ) : (
+                  <MarginBalanceChart data={marginData} />
                 )}
               </motion.div>
             )}

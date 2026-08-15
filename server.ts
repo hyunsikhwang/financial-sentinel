@@ -48,6 +48,37 @@ async function startServer() {
     }
   });
 
+  // KOFIA Freesis Margin Balance Proxy
+  app.get("/api/margin-balance", async (req, res) => {
+    const { start_date, end_date } = req.query;
+
+    const payload = {
+      dmSearch: {
+        tmpV40: "1000000",
+        tmpV41: "1",
+        tmpV1: "D",
+        tmpV45: (start_date as string) || "20260206",
+        tmpV46: (end_date as string) || "20260806",
+        OBJ_NM: "STATSCU0100000070BO"
+      }
+    };
+
+    try {
+      console.log(`Fetching KOFIA Margin Balance from ${payload.dmSearch.tmpV45} to ${payload.dmSearch.tmpV46}`);
+      const response = await axios.post("https://freesis.kofia.or.kr/meta/getMetaDataList.do", payload, {
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://freesis.kofia.or.kr/"
+        }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error("KOFIA Freesis Fetch Error:", error.message);
+      res.status(500).json({ error: "Failed to fetch Margin Balance data" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
